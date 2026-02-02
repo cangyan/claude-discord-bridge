@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """
-Discord Bot実装 - Claude-Discord Bridgeのコア機能
+Discord Bot实现 - Claude-Discord Bridge的核心功能
 
-このモジュールは以下の責任を持つ：
-1. Discordメッセージの受信・処理
-2. 画像添付ファイルの管理
-3. Claude Codeへのメッセージ転送
-4. ユーザーフィードバックの管理
-5. 定期的なメンテナンス処理
+此模块负责以下职责：
+1. Discord消息的接收与处理
+2. 图片附件文件的管理
+3. 向Claude Code转发消息
+4. 用户反馈的管理
+5. 定期维护处理
 
-拡張性のポイント：
-- メッセージフォーマット戦略の追加
-- 新しい添付ファイル形式のサポート
-- カスタムコマンドの追加
-- 通知方法の拡張
-- セッション管理の強化
+可扩展性要点：
+- 消息格式策略的添加
+- 新附件文件格式的支持
+- 自定义命令的添加
+- 通知方法的扩展
+- 会话管理的增强
 """
 
 import os
@@ -26,7 +26,7 @@ import requests
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-# パッケージルートの追加（相対インポート対応）
+# 添加包根目录（相对导入支持）
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
@@ -39,7 +39,7 @@ except ImportError:
 from config.settings import SettingsManager
 from attachment_manager import AttachmentManager
 
-# ログ設定（本番環境では外部設定ファイルから読み込み可能）
+# 日志设置（生产环境中可从外部配置文件读取）
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -48,238 +48,238 @@ logger = logging.getLogger(__name__)
 
 class MessageProcessor:
     """
-    メッセージ処理の戦略パターン実装
-    
-    将来の拡張：
-    - 異なるメッセージ形式への対応
-    - コンテンツフィルタリング
-    - メッセージ変換処理
+    消息处理的策略模式实现
+
+    未来的扩展：
+    - 支持不同的消息格式
+    - 内容过滤
+    - 消息转换处理
     """
-    
+
     @staticmethod
     def format_message_with_attachments(content: str, attachment_paths: List[str], session_num: int) -> str:
         """
-        メッセージと添付ファイルパスを適切にフォーマット
-        
-        拡張ポイント：
-        - 添付ファイル形式の多様化（動画、音声、ドキュメント等）
-        - メッセージテンプレートのカスタマイズ
-        - 多言語対応
-        
+        消息和附件路径的适当格式化
+
+        扩展点：
+        - 附件格式多样化（视频、音频、文档等）
+        - 消息模板的自定义
+        - 多语言支持
+
         Args:
-            content: 元のメッセージ内容
-            attachment_paths: 添付ファイルのパスリスト
-            session_num: セッション番号
-        
+            content: 原始消息内容
+            attachment_paths: 附件文件的路径列表
+            session_num: 会话编号
+
         Returns:
-            str: フォーマットされたメッセージ
+            str: 格式化后的消息
         """
-        # 添付ファイルパス文字列の生成
+        # 附件路径字符串的生成
         attachment_str = ""
         if attachment_paths:
-            attachment_parts = [f"[添付画像のファイルパス: {path}]" for path in attachment_paths]
+            attachment_parts = [f"[附件图片的文件路径: {path}]" for path in attachment_paths]
             attachment_str = " " + " ".join(attachment_parts)
-        
-        # メッセージタイプによる分岐処理
+
+        # 消息类型的分支处理
         if content.startswith('/'):
-            # スラッシュコマンド形式（直接Claude Codeコマンド実行）
+            # 斜杠命令形式（直接执行Claude Code命令）
             return f"{content}{attachment_str} session={session_num}"
         else:
-            # 通常メッセージ形式（Claude Codeへの通知）
-            return f"Discordからの通知: {content}{attachment_str} session={session_num}"
+            # 普通消息形式（向Claude Code的通知）
+            return f"来自Discord的通知: {content}{attachment_str} session={session_num}"
 
 class ClaudeCLIBot(commands.Bot):
     """
-    Claude CLI統合Discord Bot
-    
-    アーキテクチャ特徴：
-    - 非同期処理による高いレスポンス性
-    - モジュラー設計による拡張性
-    - 堅牢なエラーハンドリング
-    - 自動リソース管理
-    
-    拡張可能要素：
-    - カスタムコマンドの追加
-    - 権限管理システム
-    - ユーザーセッション管理
-    - 統計・分析機能
-    - Webhook統合
+    Claude CLI集成Discord Bot
+
+    架构特点：
+    - 异步处理带来的高响应性
+    - 模块化设计带来的可扩展性
+    - 健壮的错误处理
+    - 自动资源管理
+
+    可扩展元素：
+    - 自定义命令的添加
+    - 权限管理系统
+    - 用户会话管理
+    - 统计·分析功能
+    - Webhook集成
     """
-    
-    # 設定可能な定数（将来は設定ファイル化）
+
+    # 可配置常量（将来可配置文件化）
     CLEANUP_INTERVAL_HOURS = 6
     REQUEST_TIMEOUT_SECONDS = 5
     LOADING_MESSAGE = "`...`"
-    SUCCESS_MESSAGE = "> メッセージを送信完了しました"
-    
+    SUCCESS_MESSAGE = "> 消息发送完成"
+
     def __init__(self, settings_manager: SettingsManager):
         """
-        Botインスタンスの初期化
-        
+        Bot实例的初始化
+
         Args:
-            settings_manager: 設定管理インスタンス
+            settings_manager: 设置管理实例
         """
         self.settings = settings_manager
         self.attachment_manager = AttachmentManager()
         self.message_processor = MessageProcessor()
-        
-        # Discord Bot設定
+
+        # Discord Bot设置
         intents = discord.Intents.default()
-        intents.message_content = True  # メッセージ内容へのアクセス権限
-        
+        intents.message_content = True  # 消息内容的访问权限
+
         super().__init__(command_prefix='!', intents=intents)
-        
+
     async def on_ready(self):
         """
-        Bot準備完了時の初期化処理
-        
-        拡張ポイント：
-        - データベース接続初期化
-        - 外部API接続確認
-        - 統計情報の初期化
-        - 定期処理タスクの開始
+        Bot准备完成时的初始化处理
+
+        扩展点：
+        - 数据库连接初始化
+        - 外部API连接确认
+        - 统计信息的初始化
+        - 定期处理任务的开始
         """
         logger.info(f'{self.user} has connected to Discord!')
         print(f'✅ Discord bot is ready as {self.user}')
-        
-        # 初回システムクリーンアップ
+
+        # 首次系统清理
         await self._perform_initial_cleanup()
-        
-        # 定期メンテナンス処理の開始
+
+        # 定期维护处理的开始
         await self._start_maintenance_tasks()
-        
+
     async def _perform_initial_cleanup(self):
         """
-        Bot起動時の初回クリーンアップ処理
-        
-        拡張ポイント：
-        - 古いセッションデータの削除
-        - ログファイルのローテーション
-        - キャッシュの初期化
+        Bot启动时的首次清理处理
+
+        扩展点：
+        - 旧会话数据的删除
+        - 日志文件的轮转
+        - 缓存的初始化
         """
         cleanup_count = self.attachment_manager.cleanup_old_files()
         if cleanup_count > 0:
             print(f'🧹 Cleaned up {cleanup_count} old attachment files')
-            
+
     async def _start_maintenance_tasks(self):
         """
-        定期メンテナンスタスクの開始
-        
-        拡張ポイント：
-        - データベースメンテナンス
-        - 統計情報の集計
-        - 外部API状態確認
+        定期维护任务的开始
+
+        扩展点：
+        - 数据库维护
+        - 统计信息的汇总
+        - 外部API状态确认
         """
         if not self.cleanup_task.is_running():
             self.cleanup_task.start()
             print(f'⏰ Attachment cleanup task started (runs every {self.CLEANUP_INTERVAL_HOURS} hours)')
-        
+
     async def on_message(self, message):
         """
-        メッセージ受信時のメイン処理ハンドラー
-        
-        処理フロー：
-        1. メッセージの事前検証
-        2. セッション確認
-        3. 即座のユーザーフィードバック
-        4. 添付ファイル処理
-        5. メッセージフォーマット
-        6. Claude Codeへの転送
-        7. 結果フィードバック
-        
-        拡張ポイント：
-        - メッセージ前処理フィルター
-        - 権限チェック
-        - レート制限
-        - ログ記録
-        - 統計収集
+        消息接收时的主要处理处理器
+
+        处理流程：
+        1. 消息的预先验证
+        2. 会话确认
+        3. 即时用户反馈
+        4. 附件文件处理
+        5. 消息格式化
+        6. 向Claude Code转发
+        7. 结果反馈
+
+        扩展点：
+        - 消息预处理过滤器
+        - 权限检查
+        - 速率限制
+        - 日志记录
+        - 统计收集
         """
-        # 基本的な検証
+        # 基本的验证
         if not await self._validate_message(message):
             return
-        
-        # セッション確認
+
+        # 会话确认
         session_num = self.settings.channel_to_session(str(message.channel.id))
         if session_num is None:
             return
-        
-        # ユーザーフィードバック（即座のローディング表示）
+
+        # 用户反馈（即时加载显示）
         loading_msg = await self._send_loading_feedback(message.channel)
         if not loading_msg:
             return
-        
+
         try:
-            # メッセージ処理パイプライン
+            # 消息处理管道
             result_text = await self._process_message_pipeline(message, session_num)
-            
+
         except Exception as e:
-            result_text = f"❌ 処理エラー: {str(e)[:100]}"
+            result_text = f"❌ 处理错误: {str(e)[:100]}"
             logger.error(f"Message processing error: {e}", exc_info=True)
-        
-        # 最終結果の表示
+
+        # 最终结果的显示
         await self._update_feedback(loading_msg, result_text)
-        
+
     async def _validate_message(self, message) -> bool:
         """
-        メッセージの基本検証
-        
-        拡張ポイント：
-        - スパム検出
-        - 権限確認
-        - ブラックリストチェック
+        消息的基本验证
+
+        扩展点：
+        - 垃圾邮件检测
+        - 权限确认
+        - 黑名单检查
         """
-        # Bot自身のメッセージは無視
+        # Bot自身的消息忽略
         if message.author == self.user:
             return False
-        
-        # Discord標準コマンドの処理
+
+        # Discord标准命令的处理
         await self.process_commands(message)
-        
+
         return True
-        
+
     async def _send_loading_feedback(self, channel) -> Optional[discord.Message]:
         """
-        ローディングフィードバックの送信
-        
-        拡張ポイント：
-        - カスタムローディングメッセージ
-        - アニメーション表示
-        - プログレスバー
+        加载反馈的发送
+
+        扩展点：
+        - 自定义加载消息
+        - 动画显示
+        - 进度条
         """
         try:
             return await channel.send(self.LOADING_MESSAGE)
         except Exception as e:
-            logger.error(f'フィードバック送信エラー: {e}')
+            logger.error(f'反馈发送错误: {e}')
             return None
-            
+
     async def _process_message_pipeline(self, message, session_num: int) -> str:
         """
-        メッセージ処理パイプライン
-        
-        拡張ポイント：
-        - 処理ステップの追加
-        - 非同期処理の並列化
-        - キャッシュ機能
+        消息处理管道
+
+        扩展点：
+        - 处理步骤的添加
+        - 异步处理的并行化
+        - 缓存功能
         """
-        # ステップ1: 添付ファイル処理
+        # 步骤1: 附件文件处理
         attachment_paths = await self._process_attachments(message, session_num)
-        
-        # ステップ2: メッセージフォーマット
+
+        # 步骤2: 消息格式化
         formatted_message = self.message_processor.format_message_with_attachments(
             message.content, attachment_paths, session_num
         )
-        
-        # ステップ3: Claude Codeへの転送
+
+        # 步骤3: 向Claude Code转发
         return await self._forward_to_claude(formatted_message, message, session_num)
-        
+
     async def _process_attachments(self, message, session_num: int) -> List[str]:
         """
-        添付ファイルの処理
-        
-        拡張ポイント：
-        - 新しいファイル形式のサポート
-        - ファイル変換処理
-        - ウイルススキャン
+        附件文件的处理
+
+        扩展点：
+        - 新文件格式的支持
+        - 文件转换处理
+        - 病毒扫描
         """
         attachment_paths = []
         if message.attachments:
@@ -289,17 +289,17 @@ class ClaudeCLIBot(commands.Bot):
                     print(f'📎 Processed {len(attachment_paths)} attachment(s) for session {session_num}')
             except Exception as e:
                 logger.error(f'Attachment processing error: {e}')
-        
+
         return attachment_paths
-        
+
     async def _forward_to_claude(self, formatted_message: str, original_message, session_num: int) -> str:
         """
-        Claude Codeへのメッセージ転送
-        
-        拡張ポイント：
-        - 複数転送先のサポート
-        - 転送失敗時のリトライ
-        - 負荷分散
+        向Claude Code的消息转发
+
+        扩展点：
+        - 多个转发目的地的支持
+        - 转发失败时的重试
+        - 负载均衡
         """
         try:
             payload = {
@@ -309,61 +309,61 @@ class ClaudeCLIBot(commands.Bot):
                 'user_id': str(original_message.author.id),
                 'username': str(original_message.author)
             }
-            
+
             flask_port = self.settings.get_port('flask')
             response = requests.post(
                 f'http://localhost:{flask_port}/discord-message',
                 json=payload,
                 timeout=self.REQUEST_TIMEOUT_SECONDS
             )
-            
+
             return self._format_response_status(response.status_code)
-            
+
         except requests.exceptions.ConnectionError:
             logger.error("Failed to connect to Flask app. Is it running?")
-            return "❌ エラー: Flask appに接続できません"
+            return "❌ 错误: 无法连接到Flask app"
         except Exception as e:
             logger.error(f"Error forwarding message: {e}")
-            return f"❌ エラー: {str(e)[:100]}"
-            
+            return f"❌ 错误: {str(e)[:100]}"
+
     def _format_response_status(self, status_code: int) -> str:
         """
-        レスポンスステータスのフォーマット
-        
-        拡張ポイント：
-        - 詳細ステータスメッセージ
-        - 多言語対応
-        - カスタムメッセージ
+        响应状态的格式化
+
+        扩展点：
+        - 详细状态消息
+        - 多语言支持
+        - 自定义消息
         """
         if status_code == 200:
             return self.SUCCESS_MESSAGE
         else:
-            return f"⚠️ ステータス: {status_code}"
-            
+            return f"⚠️ 状态: {status_code}"
+
     async def _update_feedback(self, loading_msg: discord.Message, result_text: str):
         """
-        フィードバックメッセージの更新
-        
-        拡張ポイント：
-        - リッチメッセージ表示
-        - 進捗状況の表示
-        - インタラクティブ要素
+        反馈消息的更新
+
+        扩展点：
+        - 富消息显示
+        - 进度状况的显示
+        - 交互元素
         """
         try:
             await loading_msg.edit(content=result_text)
         except Exception as e:
-            logger.error(f'メッセージ更新失敗: {e}')
-    
+            logger.error(f'消息更新失败: {e}')
+
     @tasks.loop(hours=CLEANUP_INTERVAL_HOURS)
     async def cleanup_task(self):
         """
-        定期クリーンアップタスク
-        
-        拡張ポイント：
-        - データベースクリーンアップ
-        - ログファイル管理
-        - 統計情報の集計
-        - システムヘルスチェック
+        定期清理任务
+
+        扩展点：
+        - 数据库清理
+        - 日志文件管理
+        - 统计信息的汇总
+        - 系统健康检查
         """
         try:
             cleanup_count = self.attachment_manager.cleanup_old_files()
@@ -371,76 +371,76 @@ class ClaudeCLIBot(commands.Bot):
                 logger.info(f'Automatic cleanup: {cleanup_count} files deleted')
         except Exception as e:
             logger.error(f'Error in cleanup task: {e}')
-    
+
     @cleanup_task.before_loop
     async def before_cleanup_task(self):
-        """クリーンアップタスク開始前の準備処理"""
+        """清理任务开始前的准备处理"""
         await self.wait_until_ready()
 
 def create_bot_commands(bot: ClaudeCLIBot, settings: SettingsManager):
     """
-    Botコマンドの登録
-    
-    拡張ポイント：
-    - 新しいコマンドの追加
-    - 権限ベースのコマンド
-    - 動的コマンド登録
+    Bot命令的注册
+
+    扩展点：
+    - 新命令的添加
+    - 基于权限的命令
+    - 动态命令注册
     """
-    
+
     @bot.command(name='status')
     async def status_command(ctx):
-        """Bot状態確認コマンド"""
+        """Bot状态确认命令"""
         sessions = settings.list_sessions()
         embed = discord.Embed(
             title="Claude CLI Bot Status",
             description="✅ Bot is running",
             color=discord.Color.green()
         )
-        
+
         session_list = "\n".join([f"Session {num}: <#{ch_id}>" for num, ch_id in sessions])
         embed.add_field(name="Active Sessions", value=session_list or "No sessions configured", inline=False)
-        
+
         await ctx.send(embed=embed)
-    
+
     @bot.command(name='sessions')
     async def sessions_command(ctx):
-        """設定済みセッション一覧表示コマンド"""
+        """已设置会话一览显示命令"""
         sessions = settings.list_sessions()
         if not sessions:
             await ctx.send("No sessions configured.")
             return
-        
+
         lines = ["**Configured Sessions:**"]
         for num, channel_id in sessions:
             lines.append(f"Session {num}: <#{channel_id}>")
-        
+
         await ctx.send("\n".join(lines))
 
 def run_bot():
     """
-    Discord Botのメイン実行関数
-    
-    拡張ポイント：
-    - 複数Bot管理
-    - シャーディング対応
-    - 高可用性設定
+    Discord Bot的主要执行函数
+
+    扩展点：
+    - 多个Bot管理
+    - 分片支持
+    - 高可用性设置
     """
     settings = SettingsManager()
-    
-    # トークン確認
+
+    # 令牌确认
     token = settings.get_token()
     if not token or token == 'your_token_here':
         print("❌ Discord bot token not configured!")
         print("Run './install.sh' to set up the token.")
         sys.exit(1)
-    
-    # Botインスタンス作成
+
+    # Bot实例创建
     bot = ClaudeCLIBot(settings)
-    
-    # コマンド登録
+
+    # 命令注册
     create_bot_commands(bot, settings)
-    
-    # Bot実行
+
+    # Bot执行
     try:
         bot.run(token)
     except discord.LoginFailure:
@@ -453,3 +453,7 @@ def run_bot():
 
 if __name__ == "__main__":
     run_bot()
+
+
+
+
